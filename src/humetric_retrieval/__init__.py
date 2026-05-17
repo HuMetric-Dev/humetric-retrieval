@@ -1,4 +1,4 @@
-from humetric_retrieval.api import Candidate, SearchEngine, build_engine
+from humetric_retrieval.api import Candidate, SearchEngine, TypeBranches, build_engine
 from humetric_retrieval.bm25 import Bm25Index, build_bm25, open_bm25
 from humetric_retrieval.dense import DenseBranch, StaticVectorBranch
 from humetric_retrieval.errors import (
@@ -9,7 +9,7 @@ from humetric_retrieval.errors import (
     RetrievalError,
     StoreWrapped,
 )
-from humetric_retrieval.filters import candidate_ids
+from humetric_retrieval.filters import candidate_ids, organization_candidate_ids
 from humetric_retrieval.fuse import rrf
 
 __all__ = [
@@ -24,9 +24,11 @@ __all__ = [
     "SearchEngine",
     "StaticVectorBranch",
     "StoreWrapped",
+    "TypeBranches",
     "build_bm25",
     "build_engine",
     "candidate_ids",
     "open_bm25",
+    "organization_candidate_ids",
     "rrf",
 ]

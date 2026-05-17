@@ -93,7 +93,7 @@ def test_end_to_end_bm25_plus_dense(pg_conn: psycopg.Connection) -> None:
 
     engine = build_engine(pg_conn, text_branch=dense).unwrap()
     cands = engine.search(ParsedQuery(free_text="rust engineer"), k=3).unwrap()
-    ids = [c.person_id for c in cands]
+    ids = [c.entity_id for c in cands]
     assert ids[0] == "gh:alice"
     assert set(ids[:2]) == {"gh:alice", "gh:carol"}
 
@@ -116,7 +116,7 @@ def test_filter_intersects_with_dense_branch(pg_conn: psycopg.Connection) -> Non
 
     pq = ParsedQuery(free_text="rust", must_skills=("payments",))
     cands = engine.search(pq, k=5).unwrap()
-    ids = [c.person_id for c in cands]
+    ids = [c.entity_id for c in cands]
     assert ids == ["gh:carol"]
 
 
@@ -143,3 +143,55 @@ def test_unsatisfiable_filter_returns_zero_candidates(pg_conn: psycopg.Connectio
 
 def test_ok_is_ok() -> None:
     assert Ok(1).unwrap() == 1
+
+
+def test_organization_branch_returns_org_candidates(pg_conn: psycopg.Connection) -> None:
+    from humetric_core import Organization
+    from humetric_store import upsert_organization
+
+    from humetric_retrieval import TypeBranches, build_bm25, build_engine
+
+    _seed(pg_conn)
+    for o in (
+        Organization(
+            id="o:gh:anthropic",
+            source="github",
+            name="Anthropic",
+            org_kind="company",
+            headline="AI safety lab",
+        ),
+        Organization(
+            id="o:gh:openai",
+            source="github",
+            name="OpenAI",
+            org_kind="company",
+            headline="AI research and deployment",
+        ),
+    ):
+        upsert_organization(pg_conn, o).unwrap()
+
+    persons_bm25 = build_bm25(pg_conn, table="persons").unwrap()
+    orgs_bm25 = build_bm25(pg_conn, table="organizations").unwrap()
+
+    engine = build_engine(
+        pg_conn,
+        persons=TypeBranches(bm25=persons_bm25),
+        organizations=TypeBranches(bm25=orgs_bm25),
+    ).unwrap()
+
+    pq = ParsedQuery(free_text="ai safety", target_entity_types=("organization",))
+    cands = engine.search(pq, k=5).unwrap()
+    assert all(c.entity_type == "organization" for c in cands)
+    assert any(c.entity_id == "o:gh:anthropic" for c in cands)
+
+    # Multi-type query: persons block first, then orgs block.
+    pq_both = ParsedQuery(
+        free_text="rust ai",
+        target_entity_types=("person", "organization"),
+    )
+    both = engine.search(pq_both, k=5).unwrap()
+    types_in_order = [c.entity_type for c in both]
+    if "person" in types_in_order and "organization" in types_in_order:
+        first_org = types_in_order.index("organization")
+        last_person = len(types_in_order) - 1 - list(reversed(types_in_order)).index("person")
+        assert last_person < first_org, "person block should precede org block"

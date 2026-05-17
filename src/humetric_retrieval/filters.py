@@ -10,14 +10,10 @@ from humetric_retrieval.errors import FilterFailed, RetrievalError
 def candidate_ids(
     conn: psycopg.Connection, parsed: ParsedQuery, limit: int = 5000
 ) -> Result[set[str] | None, RetrievalError]:
-    """Apply hard filters from ParsedQuery and return the allowed person id set.
+    """Apply person-typed hard filters and return the allowed person id set.
 
     Returns ``Ok(None)`` when the query specifies no filter constraints — the
     caller treats that as "filter disabled, every candidate is allowed."
-    Returns ``Ok(set)`` when at least one constraint was specified; the set
-    may be empty if the constraints together yield zero matches, in which
-    case the caller should honestly return zero candidates rather than
-    silently fall through to "show everything."
     """
     has_constraint = (
         parsed.location is not None or parsed.min_followers is not None or bool(parsed.must_skills)
@@ -69,6 +65,35 @@ def candidate_ids(
                 params_with_skills.append(len(must_normalized))
                 params_with_skills.append(limit)
                 cur.execute(stmt, params_with_skills)
+            rows = cur.fetchall()
+    except psycopg.Error as e:
+        return Err(FilterFailed(detail=str(e)))
+
+    return Ok[set[str] | None]({row[0] for row in rows})
+
+
+def organization_candidate_ids(
+    conn: psycopg.Connection, parsed: ParsedQuery, limit: int = 5000
+) -> Result[set[str] | None, RetrievalError]:
+    """Apply organization-typed hard filters. Today only `location` applies
+    — `must_skills` and `min_followers` are person-typed and ignored here.
+    Industry filters can be threaded through as a future ParsedQuery field.
+    """
+    if parsed.location is None:
+        return Ok[set[str] | None](None)
+
+    conditions: list[sql.Composable] = [sql.SQL("LOWER(o.location) LIKE %s")]
+    params: list[object] = [f"%{parsed.location.strip().lower()}%"]
+
+    try:
+        with conn.cursor() as cur:
+            stmt = (
+                sql.SQL("SELECT o.id FROM organizations o WHERE ")
+                + sql.SQL(" AND ").join(conditions)
+                + sql.SQL(" LIMIT %s")
+            )
+            params.append(limit)
+            cur.execute(stmt, params)
             rows = cur.fetchall()
     except psycopg.Error as e:
         return Err(FilterFailed(detail=str(e)))

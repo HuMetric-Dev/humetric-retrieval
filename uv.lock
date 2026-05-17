@@ -239,7 +239,7 @@ wheels = [
 
 [[package]]
 name = "humetric-core"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "../humetric-core" }
 dependencies = [
     { name = "pydantic" },
@@ -277,7 +277,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "humetric-retrieval"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "humetric-core" },
@@ -309,7 +309,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "humetric-store"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "../humetric-store" }
 dependencies = [
     { name = "humetric-core" },
